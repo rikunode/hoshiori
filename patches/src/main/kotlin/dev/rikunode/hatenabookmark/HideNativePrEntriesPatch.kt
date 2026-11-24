@@ -62,6 +62,8 @@ val hideNativePrEntriesPatch = bytecodePatch(
         )
     )
 
+    dependsOn(hoshioriSettingsEntryPatch)
+
     execute {
         val method = NativeAdFilterFingerprint.method
         val impl = requireNotNull(method.implementation) { "Mute filter has no bytecode" }
@@ -92,6 +94,10 @@ val hideNativePrEntriesPatch = bytecodePatch(
         method.addInstructionsWithLabels(
             0,
             """
+                const-string v0, "hideNativePrEntries"
+                invoke-static { v0 }, Ldev/rikunode/settings/HoshioriRuntime;->enabled(Ljava/lang/String;)Z
+                move-result v0
+                if-eqz v0, :normal_article
                 invoke-virtual { p0 }, Lcom/hatena/android/bookmark/model/BookmarkEntry;->isPrEntry()Z
                 move-result v0
                 if-eqz v0, :normal_article
