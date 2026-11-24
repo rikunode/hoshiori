@@ -29,7 +29,11 @@ class HoshioriRuntimeTests(unittest.TestCase):
         self.assertNotIn('getMethod("setKey"', bridge)
         self.assertIn('getMethod("addPreference", preference)', bridge)
         self.assertIn('Log.e(TAG, "Could not add Hoshiori preference", failure)', bridge)
-        self.assertIn("getPreferenceScreen", bridge)
+        self.assertIn('getMethod("findPreference", CharSequence.class)', bridge)
+        self.assertIn('"category_application"', bridge)
+        self.assertIn('getDeclaredField("mIconSpaceReserved")', bridge)
+        self.assertIn('iconSpace.setBoolean(row, false)', bridge)
+        self.assertIn('invoke(category, row)', bridge)
         self.assertIn("HoshioriSettingsActivity.class", bridge)
 
     def test_six_feature_controls_and_manager_defaults(self):
@@ -83,12 +87,22 @@ class HoshioriRuntimeTests(unittest.TestCase):
         self.assertIn("items.get(pos).group != items.get(destination).group", activity)
         self.assertIn("toggle.setEnabled(entry.id != config)", activity)
 
-    def test_pr_tab_unshipped_after_failed_feasibility(self):
+    def test_pr_tab_opt_in_and_native_pager_guards(self):
         ui = source(SET / "HoshioriSettingsActivity.java")
-        self.assertIn("PR記事専用タブ：未搭載", ui)
-        self.assertNotIn('toggle("PR記事専用タブを表示"', ui)
+        self.assertIn('toggle("PR記事専用タブを表示", "showPrTab", false)', ui)
+        patch = source(PATCH / "HoshioriPrTabPatch.kt")
+        for guard in ('"getCount", 0, 2, 6', '"getItem", 1, 4, 104',
+                      '"getPageTitle", 1, 4, 64', '"onResume", 0, 4, 74',
+                      'dependsOn(hideNativePrEntriesPatch)', 'HoshioriPrFragment;'):
+            self.assertIn(guard, patch)
+        helper = source(SET / "HoshioriPrTab.java")
+        self.assertIn('enabled(context, KEY, false)', helper)
+        self.assertIn('getMethod("isPrEntry")', helper)
+        self.assertIn('!ENTRIES.containsKey(key)', helper)
+        self.assertIn('ENTRIES.clear()', helper)
+        self.assertIn('HoshioriPrTab;->capture', source(PATCH / "HideNativePrEntriesPatch.kt"))
         index = json.loads((ROOT / "patches-list.json").read_text(encoding="utf-8"))
-        self.assertFalse(any("PR article tab" in p["name"] for p in index["patches"]))
+        self.assertTrue(any(p["name"] == "PR article tab" and p["default"] for p in index["patches"]))
 
 if __name__ == "__main__":
     unittest.main()

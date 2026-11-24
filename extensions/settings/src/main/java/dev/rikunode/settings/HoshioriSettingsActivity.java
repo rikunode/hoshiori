@@ -37,7 +37,8 @@ public final class HoshioriSettingsActivity extends Activity {
         group("記事一覧");
         toggle("PR記事を非表示", "hideNativePrEntries", true);
         toggle("ランキングのお知らせを非表示", "hideWeeklyRanking", true);
-        description("PR記事専用タブ：未搭載（複数カテゴリのページング統合が未検証）");
+        toggle("PR記事専用タブを表示", "showPrTab", false);
+        description("読み込んだ記事一覧のPR記事だけを集約します。有効中は通常タブからPR記事を除外します。");
         group("記事の閲覧");
         toggle("記事内広告をブロック", "blockInAppBrowserAds", true);
         toggle("広告フィルターを自動更新", "updateAdBlockLists", true);

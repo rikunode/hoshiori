@@ -20,14 +20,20 @@ public final class HoshioriSettingsBridge {
             preference.getMethod("setSummary", CharSequence.class).invoke(row, "非公式パッチの設定");
             preference.getMethod("setIntent", Intent.class).invoke(row,
                     new Intent(context, HoshioriSettingsActivity.class));
-            Object screen = fragment.getClass().getMethod("getPreferenceScreen").invoke(fragment);
+            // The stock application category has key "category_application".
+            Object category = fragment.getClass().getMethod("findPreference", CharSequence.class)
+                    .invoke(fragment, "category_application");
             Class<?> group = Class.forName("androidx.preference.PreferenceGroup");
-            if (screen == null) {
-                Log.e(TAG, "PreferenceScreen is unavailable");
+            if (!group.isInstance(category)) {
+                Log.e(TAG, "Application preference category is unavailable");
                 return;
             }
-            if (!Boolean.TRUE.equals(group.getMethod("addPreference", preference).invoke(screen, row))) {
-                Log.e(TAG, "PreferenceScreen rejected Hoshiori entry");
+            // The original XML uses app:iconSpaceReserved="false" on all its rows.
+            java.lang.reflect.Field iconSpace = preference.getDeclaredField("mIconSpaceReserved");
+            iconSpace.setAccessible(true);
+            iconSpace.setBoolean(row, false);
+            if (!Boolean.TRUE.equals(group.getMethod("addPreference", preference).invoke(category, row))) {
+                Log.e(TAG, "Application category rejected Hoshiori entry");
                 return;
             }
             Log.i(TAG, "Hoshiori preference added");

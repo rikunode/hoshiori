@@ -26,6 +26,7 @@ EXPECTED_NAMES = {
     "Hoshiori settings Activity registration",
     "Hoshiori in-app settings",
     "Customize the Hoshiori navigation drawer",
+    "PR article tab",
 }
 
 
@@ -52,8 +53,8 @@ def validate_index(data: dict) -> None:
     if data.get("version") != VERSION:
         raise ValueError("patch index version mismatch")
     patches = data.get("patches")
-    if not isinstance(patches, list) or len(patches) != 9:
-        raise ValueError("expected exactly nine patches")
+    if not isinstance(patches, list) or len(patches) != 10:
+        raise ValueError("expected exactly ten patches")
     if {p.get("name") for p in patches} != EXPECTED_NAMES:
         raise ValueError("patch names do not match release")
     for patch in patches:
@@ -105,7 +106,7 @@ def main() -> None:
     validate_manifest(remote)
     validate_index(index)
     validate_bundle(ROOT / "patches/build/libs" / f"patches-{VERSION}.mpp")
-    print("MORPHE_ANDROID_SOURCE_PASS: JSON created_at, version, 9 patches, 58000, Android classes.dex")
+    print("MORPHE_ANDROID_SOURCE_PASS: JSON created_at, version, 10 patches, 58000, Android classes.dex")
 
 
 if __name__ == "__main__":
