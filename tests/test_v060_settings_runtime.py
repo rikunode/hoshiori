@@ -93,13 +93,20 @@ class HoshioriRuntimeTests(unittest.TestCase):
         patch = source(PATCH / "HoshioriPrTabPatch.kt")
         for guard in ('"getCount", 0, 2, 6', '"getItem", 1, 4, 104',
                       '"getPageTitle", 1, 4, 64', '"onResume", 0, 4, 74',
-                      'dependsOn(hideNativePrEntriesPatch)', 'HoshioriPrFragment;'):
+                      '"onViewCreated", 2, 16, 296', 'dependsOn(hideNativePrEntriesPatch)',
+                      'HotEntryListFragment;', '->createFragment(', '->attachPage('):
             self.assertIn(guard, patch)
         helper = source(SET / "HoshioriPrTab.java")
         self.assertIn('enabled(context, KEY, false)', helper)
         self.assertIn('getMethod("isPrEntry")', helper)
+        self.assertIn('getDeclaredField("topCategory")', helper)
+        self.assertIn('BookmarkEntry', helper)
+        self.assertIn('HotEntryListViewModel$ListItem$EntryItem', helper)
         self.assertIn('!ENTRIES.containsKey(key)', helper)
         self.assertIn('ENTRIES.clear()', helper)
+        self.assertIn('ENTRIES.put(key, entry)', helper)
+        self.assertIn('submitData', helper)
+        self.assertIn('getArguments', helper)
         self.assertIn('HoshioriPrTab;->capture', source(PATCH / "HideNativePrEntriesPatch.kt"))
         index = json.loads((ROOT / "patches-list.json").read_text(encoding="utf-8"))
         self.assertTrue(any(p["name"] == "PR article tab" and p["default"] for p in index["patches"]))

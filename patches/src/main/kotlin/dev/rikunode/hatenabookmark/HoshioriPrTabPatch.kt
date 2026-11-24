@@ -9,6 +9,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 private const val ADAPTER = "Lcom/hatena/android/bookmark/presentation/fragment/entrylist/TopFragment\$Adapter;"
 private const val TOP = "Lcom/hatena/android/bookmark/presentation/fragment/entrylist/TopFragment;"
 private const val PR = "Ldev/rikunode/settings/HoshioriPrTab;"
+private const val HOT = "Lcom/hatena/android/bookmark/presentation/fragment/entrylist/HotEntryListFragment;"
 
 /** Append one page to the stock pager, leaving the original enum and saved tab order unchanged. */
 @Suppress("unused")
@@ -36,6 +37,11 @@ val hoshioriPrTabPatch = bytecodePatch(
         val item = guarded(ADAPTER, "getItem", 1, 4, 104)
         val title = guarded(ADAPTER, "getPageTitle", 1, 4, 64)
         val resume = guarded(TOP, "onResume", 0, 4, 74)
+        guarded(ADAPTER, "getItemId", 1, 4, 2)
+        val viewCreated = guarded(HOT, "onViewCreated", 2, 16, 296)
+        guarded(HOT, "reload", 1, 5, 42)
+        guarded(HOT, "onShown", 0, 5, 34)
+        guarded(HOT, "onDestroyView", 0, 3, 14)
         fun at(method: com.android.tools.smali.dexlib2.iface.Method, offset: Int, opcode: Opcode): Int {
             var pc = 0
             for ((index, instruction) in method.implementation!!.instructions.withIndex()) {
@@ -47,6 +53,9 @@ val hoshioriPrTabPatch = bytecodePatch(
         val initIndex = at(init, 0x2f, Opcode.RETURN_VOID)
         val countIndex = at(count, 5, Opcode.RETURN)
         val resumeIndex = at(resume, 0x2b, Opcode.IF_NEZ)
+        val nativeDataIndex = at(viewCreated, 0xea, Opcode.INVOKE_VIRTUAL)
+        require((viewCreated.implementation!!.instructions.elementAt(nativeDataIndex) as ReferenceInstruction)
+            .reference.toString().endsWith("->getViewLifecycleOwner()Landroidx/lifecycle/LifecycleOwner;"))
         require(item.implementation!!.instructions.first().opcode == Opcode.SGET_OBJECT)
         require(title.implementation!!.instructions.first().opcode == Opcode.SGET_OBJECT)
         val owner = mutableClassDefBy(ADAPTER)
@@ -65,8 +74,9 @@ val hoshioriPrTabPatch = bytecodePatch(
             invoke-static { p0, p1 }, ${PR}->isPrPage(Ljava/lang/Object;I)Z
             move-result v0
             if-eqz v0, :original_page
-            new-instance v0, Ldev/rikunode/settings/HoshioriPrFragment;
-            invoke-direct { v0 }, Ldev/rikunode/settings/HoshioriPrFragment;-><init>()V
+            invoke-static { p0 }, ${PR}->createFragment(Ljava/lang/Object;)Ljava/lang/Object;
+            move-result-object v0
+            check-cast v0, Landroidx/fragment/app/Fragment;
             return-object v0
             :original_page
             nop
@@ -79,6 +89,41 @@ val hoshioriPrTabPatch = bytecodePatch(
             return-object v0
             :original_title
             nop
+        """.trimIndent())
+        // Avoid restoring the old 0.7.0 text-list fragment under its old cache ID.
+        find("getItemId", 1).addInstructionsWithLabels(0, """
+            invoke-static { p0, p1 }, ${PR}->isPrPage(Ljava/lang/Object;I)Z
+            move-result v0
+            if-eqz v0, :original_id
+            const-wide/32 v0, 110071
+            return-wide v0
+            :original_id
+            nop
+        """.trimIndent())
+        val hot = mutableClassDefBy(HOT)
+        // Keep the host adapter, layout, decorations and callbacks; replace only the
+        // category flow collection for the marked PR fragment.
+        hot.methods.single { it.name == "onViewCreated" && it.parameterTypes.size == 2 }
+            .addInstructionsWithLabels(nativeDataIndex, """
+                invoke-static { p0 }, ${PR}->attachPage(Ljava/lang/Object;)Z
+                move-result v1
+                if-eqz v1, :stock_feed
+                return-void
+                :stock_feed
+                nop
+            """.trimIndent())
+        for (name in listOf("reload", "onShown")) {
+            hot.methods.single { it.name == name }.addInstructionsWithLabels(0, """
+                invoke-static { p0 }, ${PR}->reloadPage(Ljava/lang/Object;)Z
+                move-result v0
+                if-eqz v0, :stock_reload
+                return-void
+                :stock_reload
+                nop
+            """.trimIndent())
+        }
+        hot.methods.single { it.name == "onDestroyView" }.addInstructions(0, """
+            invoke-static { p0 }, ${PR}->detachPage(Ljava/lang/Object;)V
         """.trimIndent())
         // Reuse the host's existing tab-order-change navigation path.
         mutableClassDefBy(TOP).methods.single {

@@ -1,18 +1,16 @@
 package dev.rikunode.settings;
 
 import android.content.Context;
-import android.content.Intent;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.LinearLayout;
-import android.widget.ListView;
-import android.widget.TextView;
 
-import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,11 +21,13 @@ public final class HoshioriPrTab {
     private static final String KEY = "showPrTab";
     private static final int ORIGINAL_COUNT = 11;
     private static final int MAX_ENTRIES = 300;
+    private static final String PAGE = "hoshiori_pr_page";
+    private static final String HOST = "com.hatena.android.bookmark.";
     private static final WeakHashMap<Object, Boolean> ADAPTERS = new WeakHashMap<>();
-    private static final LinkedHashMap<String, Entry> ENTRIES = new LinkedHashMap<>();
+    private static final LinkedHashMap<String, Object> ENTRIES = new LinkedHashMap<>();
+    private static final WeakHashMap<Object, Boolean> PAGES = new WeakHashMap<>();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static volatile Context app;
-    private static WeakReference<ArrayAdapter<Entry>> visibleAdapter = new WeakReference<>(null);
 
     private HoshioriPrTab() {}
 
@@ -50,10 +50,9 @@ public final class HoshioriPrTab {
         return position == ORIGINAL_COUNT && Boolean.TRUE.equals(ADAPTERS.get(adapter));
     }
 
-    /** The stock onResume already rebuilds the TopFragment if its tab settings changed. */
     public static boolean configChanged(Object fragment) {
         try {
-            Object adapter = fragment.getClass().getMethod("getAdapter").invoke(fragment);
+            Object adapter = call(fragment, "getAdapter");
             return Boolean.TRUE.equals(ADAPTERS.get(adapter)) != enabled(app);
         } catch (ReflectiveOperationException | RuntimeException failure) {
             Log.e("HoshioriPR", "Could not compare tab configuration", failure);
@@ -77,7 +76,8 @@ public final class HoshioriPrTab {
                 synchronized (ENTRIES) {
                     added = !ENTRIES.containsKey(key);
                     if (added) {
-                        ENTRIES.put(key, new Entry(title, url, original));
+                        // Preserve the complete stock BookmarkEntry, including image and users.
+                        ENTRIES.put(key, entry);
                         if (ENTRIES.size() > MAX_ENTRIES)
                             ENTRIES.remove(ENTRIES.keySet().iterator().next());
                     }
@@ -94,58 +94,103 @@ public final class HoshioriPrTab {
         }
     }
 
-    private static List<Entry> snapshot() {
-        synchronized (ENTRIES) { return new ArrayList<>(ENTRIES.values()); }
+    private static Object call(Object receiver, String name) throws ReflectiveOperationException {
+        Method method = receiver.getClass().getMethod(name);
+        method.setAccessible(true);
+        return method.invoke(receiver);
+    }
+
+    /** The PR page is the real HotEntryListFragment, with only its data source changed. */
+    public static Object createFragment(Object adapter) {
+        try {
+            Field categoryField = adapter.getClass().getDeclaredField("topCategory");
+            categoryField.setAccessible(true);
+            Object category = categoryField.get(adapter);
+            Class<?> categoryType = Class.forName(HOST + "model.TopCategory");
+            Class<?> union = Class.forName(HOST + "model.TopCategoryOrCategory");
+            Object wrapped = Class.forName(HOST + "model.TopCategoryOrCategory$TopCategory")
+                    .getConstructor(categoryType).newInstance(category);
+            Class<?> fragment = Class.forName(HOST + "presentation.fragment.entrylist.HotEntryListFragment");
+            Object companion = fragment.getField("Companion").get(null);
+            Object page = companion.getClass().getMethod("newInstance", union).invoke(companion, wrapped);
+            ((Bundle) call(page, "getArguments")).putBoolean(PAGE, true);
+            return page;
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            throw new IllegalStateException("Could not create native PR page", failure);
+        }
+    }
+
+    public static boolean isNativePrPage(Object fragment) {
+        try {
+            Bundle args = (Bundle) call(fragment, "getArguments");
+            return args != null && args.getBoolean(PAGE, false);
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            throw new IllegalStateException("Could not read native PR page arguments", failure);
+        }
+    }
+
+    /** Called after the native recycler, decorations and swipe listener are installed. */
+    public static boolean attachPage(Object fragment) {
+        if (!isNativePrPage(fragment)) return false;
+        PAGES.put(fragment, true);
+        submit(fragment);
+        return true; // Do not subscribe to the stock category network feed on this page.
+    }
+
+    public static void detachPage(Object fragment) {
+        PAGES.remove(fragment);
+    }
+
+    public static boolean reloadPage(Object fragment) {
+        if (!isNativePrPage(fragment)) return false;
+        submit(fragment);
+        try {
+            View view = (View) call(fragment, "getView");
+            if (view != null) {
+                int id = view.getResources().getIdentifier("swipe_refresh", "id",
+                        view.getContext().getPackageName());
+                View swipe = view.findViewById(id);
+                if (swipe != null) swipe.getClass().getMethod("setRefreshing", boolean.class)
+                        .invoke(swipe, false);
+            }
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            Log.e("HoshioriPR", "Could not reset native refresh indicator", failure);
+        }
+        return true;
     }
 
     private static void refresh() {
-        ArrayAdapter<Entry> adapter = visibleAdapter.get();
-        if (adapter == null) return;
-        adapter.setNotifyOnChange(false);
-        adapter.clear();
-        adapter.addAll(snapshot());
-        adapter.notifyDataSetChanged();
-    }
-
-    public static View createView(Context context) {
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        TextView note = new TextView(context);
-        note.setText("読み込んだ記事一覧から集めたPR記事");
-        int padding = (int) (16 * context.getResources().getDisplayMetrics().density);
-        note.setPadding(padding, padding, padding, padding);
-        root.addView(note);
-        ListView list = new ListView(context);
-        ArrayAdapter<Entry> adapter = new ArrayAdapter<>(context,
-                android.R.layout.simple_list_item_1, snapshot());
-        list.setAdapter(adapter);
-        visibleAdapter = new WeakReference<>(adapter);
-        TextView empty = new TextView(context);
-        empty.setText("まだPR記事が取得されていません。ほかのタブの記事一覧を読み込んでください。");
-        empty.setPadding(padding, padding, padding, padding);
-        root.addView(empty);
-        root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
-        list.setEmptyView(empty);
-        list.setOnItemClickListener((parent, view, position, id) -> {
-            Entry entry = adapter.getItem(position);
-            if (entry == null) return;
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setClassName(context, "com.hatena.android.bookmark.presentation.activity.WebViewActivity");
-            intent.setData(entry.url);
-            if (entry.original != null) intent.putExtra("original_uri", entry.original);
-            context.startActivity(intent);
-        });
-        return root;
-    }
-
-    private static final class Entry {
-        final String title;
-        final Uri url, original;
-        Entry(String title, Uri url, Uri original) {
-            this.title = title; this.url = url; this.original = original;
+        for (Object fragment : new ArrayList<>(PAGES.keySet())) {
+            if (fragment != null) submit(fragment);
         }
-        @Override public String toString() {
-            return title + "\n" + url.getHost();
+    }
+
+    private static void submit(Object fragment) {
+        try {
+            if (call(fragment, "getView") == null) return;
+            Field field = fragment.getClass().getDeclaredField("adapter");
+            field.setAccessible(true);
+            Object adapter = field.get(fragment);
+            Object owner = call(fragment, "getViewLifecycleOwner");
+            Object lifecycle = call(owner, "getLifecycle");
+            Class<?> entry = Class.forName(HOST + "model.BookmarkEntry");
+            Class<?> dated = Class.forName(HOST + "model.EntryWithDate");
+            Class<?> item = Class.forName(HOST + "presentation.viewmodel.HotEntryListViewModel$ListItem$EntryItem");
+            List<Object> snapshot;
+            synchronized (ENTRIES) { snapshot = new ArrayList<>(ENTRIES.values()); }
+            List<Object> rows = new ArrayList<>(snapshot.size());
+            ZonedDateTime now = ZonedDateTime.now();
+            for (Object value : snapshot) {
+                Object wrapped = dated.getConstructor(entry, ZonedDateTime.class).newInstance(value, now);
+                rows.add(item.getConstructor(dated).newInstance(wrapped));
+            }
+            Class<?> paging = Class.forName("androidx.paging.PagingData");
+            Object companion = paging.getField("Companion").get(null);
+            Object data = companion.getClass().getMethod("from", List.class).invoke(companion, rows);
+            adapter.getClass().getMethod("submitData", Class.forName("androidx.lifecycle.Lifecycle"), paging)
+                    .invoke(adapter, lifecycle, data);
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            Log.e("HoshioriPR", "Could not submit native PR cards", failure);
         }
     }
 }
