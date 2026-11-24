@@ -25,7 +25,10 @@ class HoshioriRuntimeTests(unittest.TestCase):
             'activity.setAttribute("android:exported", "false")',
         ): self.assertIn(expected, p)
         bridge = source(SET / "HoshioriSettingsBridge.java")
-        self.assertIn("setOnPreferenceClickListener", bridge)
+        self.assertIn('getMethod("setIntent", Intent.class)', bridge)
+        self.assertNotIn('getMethod("setKey"', bridge)
+        self.assertIn('getMethod("addPreference", preference)', bridge)
+        self.assertIn('Log.e(TAG, "Could not add Hoshiori preference", failure)', bridge)
         self.assertIn("getPreferenceScreen", bridge)
         self.assertIn("HoshioriSettingsActivity.class", bridge)
 

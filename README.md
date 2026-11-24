@@ -2,7 +2,7 @@
 
 Hoshioriは、はてなブックマークのAndroidアプリで気になる表示や記事閲覧時の動作を調整する、個人制作の非公式パッチ集です。はてな公式とは無関係です。
 
-**公開版：v0.6.0。対応アプリはHatena Bookmark 5.80（versionCode 58000）のみです。** 5.84など、ほかのバージョンには対応していません。パッチの利用にはMorphe Managerと対応する5.80のAPKが必要です。APK本体はこのリポジトリでは配布していません。
+**公開版：v0.6.1。対応アプリはHatena Bookmark 5.80（versionCode 58000）のみです。** 5.84など、ほかのバージョンには対応していません。パッチの利用にはMorphe Managerと対応する5.80のAPKが必要です。APK本体はこのリポジトリでは配布していません。
 
 [**Morphe Managerにパッチソースを追加する**](https://morphe.software/add-source?github=rikunode/hoshiori)
 
@@ -29,7 +29,7 @@ https://github.com/rikunode/hoshiori
 
 1. [Morphe公式サイト](https://morphe.software/)からMorphe Managerを導入します。
 2. Managerの「Sources（パッチソース）」を開き、上記のリポジトリURLを追加してソースを更新します。上の「パッチソースを追加する」リンクから登録しても構いません。
-3. **v0.6.0のパッチが9件表示されること**を確認します。0件、エラー、対応外の表示が出た場合は、そのまま適用せずソースとバージョンを確認してください。
+3. **v0.6.1のパッチが9件表示されること**を確認します。0件、エラー、対応外の表示が出た場合は、そのまま適用せずソースとバージョンを確認してください。
 4. パッチ適用画面で、**Hatena Bookmark 5.80（versionCode 58000）** のAPKを選びます。5.84などを選ばないでください。
 5. 利用したいパッチとオプションを選択し、Managerでパッチを適用します。生成されたAPKを確認してからインストールしてください。
 6. まず記事一覧とアプリ内ブラウザが正常に開けるか確認し、必要に応じて各機能を試してください。クローン化を使う場合は、元アプリをアンインストールする必要はありません。
@@ -84,6 +84,7 @@ https://github.com/rikunode/hoshiori
 - **v0.4.5**：配布リポジトリをHoshioriに改名し、広告フィルターの取得先URLを更新。パッチの動作ロジックは変更していません。
 - **v0.5.0**：ブックマーク詳細画面の記事カードから記事を開くパッチを追加。初期設定はON。
 - **v0.6.0**：アプリ内にHoshiori専用設定画面を追加し、既存機能の実行時切替とドロワーの表示・並び順の変更に対応。PR専用タブはデータのページング統合を確認できず未実装。
+- **v0.6.1**：設定画面に Hoshiori が表示されない不具合を修正。
 
 開発者向けのビルド確認手順：
 
@@ -93,4 +94,4 @@ python scripts/validate_morphe_release.py
 python -m unittest discover -s tests -v
 ```
 
-ビルド成果物は `patches/build/libs/patches-0.6.0.mpp` です。ソース情報は `patches-bundle.json` とビルドで生成される `patches-list.json` に含まれます。実APKはリポジトリに含まれないため、GitHub Actions上の検証と実APKでの確認には範囲の違いがあります。
+ビルド成果物は `patches/build/libs/patches-0.6.1.mpp` です。ソース情報は `patches-bundle.json` とビルドで生成される `patches-list.json` に含まれます。実APKはリポジトリに含まれないため、GitHub Actions上の検証と実APKでの確認には範囲の違いがあります。
